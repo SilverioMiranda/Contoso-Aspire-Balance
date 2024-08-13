@@ -1,0 +1,105 @@
+﻿@page "/lancamentos"
+@using Contoso.Data
+@using Microsoft.EntityFrameworkCore
+@using Contoso.Data.Entities
+@attribute [StreamRendering(true)]
+@attribute [OutputCache(Duration = 5)]
+
+@inject IDbContextFactory<ContosoDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Lançamentos</PageTitle>
+
+<h1>Lançamentos</h1>
+
+<p>Este componente demonstra a exibição de dados carregados de um serviço de API de backend.</p>
+
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Data de criação</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var forecast in transactions)
+            {
+                <tr>
+                    <td>@forecast.Id</td>
+                    <td>@forecast.CreatedAt</td>
+                    <td>@forecast.Description</td>
+                    <td>@forecast.Value</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="() => ChangePage(currentPage - 1)" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </button>
+            </li>
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(currentPage == i ? "active" : "")">
+                    <button class="page-link" @onclick="() => ChangePage(i)">@i</button>
+                </li>
+            }
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="() => ChangePage(currentPage + 1)" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </button>
+            </li>
+        </ul>
+    </nav>
+
+
+@code {
+    private IEnumerable<Transaction>? transactions = [];
+    [SupplyParameterFromQuery(Name = "page")]
+    public int currentPage { get; set; } = 1;
+
+
+    private int pageSize = 10; // Número de itens por página
+    private int totalPages = 0;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+
+        using (var ContosoDbContext = DbContextFactory.CreateDbContext())
+        {
+            var skip = currentPage - 1 * pageSize;
+            if(skip < 0)
+            {
+                skip = 0;
+            }
+            if(pageSize < 1)
+            {
+                pageSize = 10;
+            }
+            transactions = await ContosoDbContext.Transactions.Skip(skip).Take(pageSize).ToListAsync();
+
+
+            totalPages = (int)Math.Ceiling((double)await ContosoDbContext.Transactions.CountAsync() / pageSize);
+        }
+    }
+
+    private async Task ChangePage(int pageNumber)
+    {
+        if(pageNumber < 1 || pageNumber > totalPages)
+        {
+            return;
+        }
+        currentPage = pageNumber;
+        NavigationManager.NavigateTo($"lancamentos?page={pageNumber}");
+    }
+
+
+}

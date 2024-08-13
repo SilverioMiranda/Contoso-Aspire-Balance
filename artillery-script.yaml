@@ -1,0 +1,18 @@
+config:
+  target: "https://localhost:9001"
+  phases:
+    - duration: 60
+      arrivalRate: 10 # Número de requisições por segundo
+  headers:
+    X-API-KEY: "contoso"
+  variables:
+    amountRange:
+      - -10000
+      - 10000
+
+scenarios:
+  - flow:
+      - post:
+          url: "/"
+          json:
+            Amount: "{{ $randomInt(amountRange[0], amountRange[1]) }}"

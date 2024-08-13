@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<!-- Make build happy with generated migrations -->
+		<NoWarn>$(NoWarn);IDE0161;IDE0005</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.7">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<AspireProjectOrPackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Contoso.Data\Contoso.Data.csproj" />
+	  <ProjectReference Include="..\Contoso.ServiceDefaults\Contoso.ServiceDefaults.csproj" />
+	</ItemGroup>
+
+</Project>

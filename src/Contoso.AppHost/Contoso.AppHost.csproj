@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>4a3cb98e-8f81-4cef-9f63-38b0c6a14246</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Contoso.DailyBalance.API\Contoso.DailyBalance.API.csproj" />
+    <ProjectReference Include="..\Contoso.DailyBalance.Worker\Contoso.DailyBalance.Worker.csproj" />
+    <ProjectReference Include="..\Contoso.DatabaseMigrationService\Contoso.DatabaseMigrationService.csproj" />
+    <ProjectReference Include="..\Contoso.Transactions.API\Contoso.Transactions.API.csproj" />
+    <ProjectReference Include="..\Contoso.Transactions.Worker\Contoso.Transactions.Worker.csproj" />
+    <ProjectReference Include="..\Contoso.Web\Contoso.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.1.0" />
+    <PackageReference Include="Aspire.Hosting.Kafka" Version="8.1.0" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="8.1.0" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="8.1.0" />
+	  <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="8.0.2" />
+	  <PackageReference Include="AspNetCore.HealthChecks.Kafka" Version="8.0.1" />
+  </ItemGroup>
+
+</Project>
