@@ -1,6 +1,6 @@
 # Contoso Cash Flow Management
 
-Este projeto foi desenvolvido para atender a necessidade de um comerciante em controlar seu fluxo de caixa di·rio, gerenciando lanÁamentos (dÈbitos e crÈditos) e gerando relatÛrios com o saldo di·rio consolidado.
+Este projeto foi desenvolvido para atender a necessidade de um comerciante em controlar seu fluxo de caixa di√°rio, gerenciando lan√ßamentos (d√©bitos e cr√©ditos) e gerando relat√≥rios com o saldo di√°rio consolidado.
 
 ## Tecnologias Utilizadas
 
@@ -14,13 +14,13 @@ Este projeto foi desenvolvido para atender a necessidade de um comerciante em co
 
 ## Estrutura do Projeto
 
-O projeto consiste em v·rias APIs e serviÁos que trabalham juntos para garantir o controle eficiente do fluxo de caixa:
+O projeto consiste em v√°rias APIs e servi√ßos que trabalham juntos para garantir o controle eficiente do fluxo de caixa:
 
 **Transactions API**
-- EndereÁo: `https://localhost:9001`
-- FunÁ„o: Receber lanÁamentos (crÈditos e dÈbitos) e envi·-los para um tÛpico no Kafka.
+- Endere√ßo: `https://localhost:9001`
+- Fun√ß√£o: Receber lan√ßamentos (cr√©ditos e d√©bitos) e envi√°-los para um t√≥pico no Kafka.
 
-**Exemplo de RequisiÁ„o de CriaÁ„o de LanÁamento:**
+**Exemplo de Requisi√ß√£o de Cria√ß√£o de Lan√ßamento:**
 ```bash
 curl --location 'https://localhost:9001/lancamentos' \
 --header 'X-API-KEY: contoso' \
@@ -29,9 +29,9 @@ curl --location 'https://localhost:9001/lancamentos' \
     "Amount": -500
 }'
 ```
-Esta requisiÁ„o adiciona um lanÁamento ao banco de dados, que pode ser um valor positivo (crÈdito) ou negativo (dÈbito).
+Esta requisi√ß√£o adiciona um lan√ßamento ao banco de dados, que pode ser um valor positivo (cr√©dito) ou negativo (d√©bito).
 
-**API para Listar LanÁamentos do Dia:**
+**API para Listar Lan√ßamentos do Dia:**
 ```bash
 curl --location 'https://localhost:9001/lancamentos/2024-08-13' \
 --header 'X-API-KEY: contoso'
@@ -44,28 +44,28 @@ curl --location 'https://localhost:9000/consolidado/2024-08-13' \
 ```
 
 **Contoso.Transactions.Worker**
-- FunÁ„o: Consumir as mensagens do Kafka em um `BackgroundService` e salvar os lanÁamentos no banco de dados SQL Server.
+- Fun√ß√£o: Consumir as mensagens do Kafka em um `BackgroundService` e salvar os lan√ßamentos no banco de dados SQL Server.
 
 ## Estrutura de Projetos e Pastas
 
 - **src/0. Host / Contoso.AppHost**
-  - ServiÁo do .NET Aspire que orquestra os containers e serviÁos necess·rios para o funcionamento do projeto. Este serviÁo gerencia a configuraÁ„o dos containers, inicia e monitora as inst‚ncias das aplicaÁıes e serviÁos, e garante a comunicaÁ„o entre os componentes do sistema.
+  - Servi√ßo do .NET Aspire que orquestra os containers e servi√ßos necess√°rios para o funcionamento do projeto. Este servi√ßo gerencia a configura√ß√£o dos containers, inicia e monitora as inst√¢ncias das aplica√ß√µes e servi√ßos, e garante a comunica√ß√£o entre os componentes do sistema.
 
 - **1. Applications**
   
   - **Balances**
-    - **Contoso.DailyBalance.API**: Projeto que contÈm a API `/consolidado/{data}` que retorna o saldo consolidado do dia informado.
-    - **Contoso.DailyBalance.Services**: Projeto que contÈm a implementaÁ„o dos serviÁos utilizados pela `Contoso.DailyBalance.API` e `Contoso.DailyBalance.Worker`.
-    - **Contoso.DailyBalance.Worker**: Projeto que executa um `BackgroundService` todos os dias ‡s 00:15, respons·vel por salvar o balanÁo do dia anterior.
+    - **Contoso.DailyBalance.API**: Projeto que cont√©m a API `/consolidado/{data}` que retorna o saldo consolidado do dia informado.
+    - **Contoso.DailyBalance.Services**: Projeto que cont√©m a implementa√ß√£o dos servi√ßos utilizados pela `Contoso.DailyBalance.API` e `Contoso.DailyBalance.Worker`.
+    - **Contoso.DailyBalance.Worker**: Projeto que executa um `BackgroundService` todos os dias √†s 00:15, respons√°vel por salvar o balan√ßo do dia anterior.
 
-      O c·lculo do saldo di·rio È feito da seguinte forma:
+      O c√°lculo do saldo di√°rio √© feito da seguinte forma:
 
-      1. **VerificaÁ„o do ⁄ltimo Saldo**: O saldo mais recente È obtido do banco de dados.
-      2. **C·lculo do Saldo Inicial**: Se n„o houver saldo anterior, o saldo total È calculado somando todos os lanÁamentos desde o inÌcio.
-      3. **AtualizaÁ„o do Saldo**: Se houver um saldo anterior, o sistema verifica se ele cobre o dia anterior. Caso contr·rio, ele calcula o saldo somando os lanÁamentos realizados desde o ˙ltimo saldo atÈ o ˙ltimo segundo do dia anterior.
-      4. **PersistÍncia do Novo Saldo**: O novo saldo consolidado È salvo no banco de dados com a data correspondente.
+      1. **Verifica√ß√£o do √öltimo Saldo**: O saldo mais recente √© obtido do banco de dados.
+      2. **C√°lculo do Saldo Inicial**: Se n√£o houver saldo anterior, o saldo total √© calculado somando todos os lan√ßamentos desde o in√≠cio.
+      3. **Atualiza√ß√£o do Saldo**: Se houver um saldo anterior, o sistema verifica se ele cobre o dia anterior. Caso contr√°rio, ele calcula o saldo somando os lan√ßamentos realizados desde o √∫ltimo saldo at√© o √∫ltimo segundo do dia anterior.
+      4. **Persist√™ncia do Novo Saldo**: O novo saldo consolidado √© salvo no banco de dados com a data correspondente.
 
-      **Exemplo de C·lculo do Saldo:**
+      **Exemplo de C√°lculo do Saldo:**
       ```csharp
       var ultimoSaldo = await dbContext.Balances
           .OrderByDescending(x => x.Date)
@@ -85,10 +85,10 @@ curl --location 'https://localhost:9000/consolidado/2024-08-13' \
       }
       else
       {
-          // Verifica se a data da ˙ltima transaÁ„o È anterior ao dia anterior
+          // Verifica se a data da √∫ltima transa√ß√£o √© anterior ao dia anterior
           if (ultimoSaldo.Date < now.AddDays(-1))
           {
-              // Usa UTCNow - 15 minutos como data m·xima
+              // Usa UTCNow - 15 minutos como data m√°xima
               var maxDate = now.AddMinutes(-15);
 
               saldo = ultimoSaldo.Value + await dbContext.Transactions
@@ -98,7 +98,7 @@ curl --location 'https://localhost:9000/consolidado/2024-08-13' \
           }
           else
           {
-              // Usa o ˙ltimo segundo do dia anterior como data m·xima
+              // Usa o √∫ltimo segundo do dia anterior como data m√°xima
               saldo = ultimoSaldo.Value + await dbContext.Transactions
                   .Where(t => t.CreatedAt > ultimoSaldo.Date && t.CreatedAt <= maxDatePreviousDay)
                   .SumAsync(t => t.Value, cancellationToken: stoppingToken)
@@ -113,39 +113,40 @@ curl --location 'https://localhost:9000/consolidado/2024-08-13' \
       ```
 
   - **Transactions**
-    - **Contoso.Transactions.API**: API que implementa os mÈtodos `POST /lancamentos`, que faz o cadastro de um lanÁamento, e o `GET /lancamentos/{date:datetime}`, que retorna a lista de todos os lanÁamentos do dia informado.
-    - **Contoso.Transactions.Services**: Projeto que implementa os serviÁos utilizados pela `.API` e `.Worker`.
-    - **Contoso.Transactions.Worker**: Projeto que È respons·vel por ler os lanÁamentos do Kafka e salv·-los no SQL Server.
+    - **Contoso.Transactions.API**: API que implementa os m√©todos `POST /lancamentos`, que faz o cadastro de um lan√ßamento, e o `GET /lancamentos/{date:datetime}`, que retorna a lista de todos os lan√ßamentos do dia informado.
+    - **Contoso.Transactions.Services**: Projeto que implementa os servi√ßos utilizados pela `.API` e `.Worker`.
+    - **Contoso.Transactions.Worker**: Projeto que √© respons√°vel por ler os lan√ßamentos do Kafka e salv√°-los no SQL Server.
 
-- **Opcionalmente existe o projeto Contoso.Web com uma aplicaÁ„o Blazor.**
+- **Opcionalmente existe o projeto Contoso.Web com uma aplica√ß√£o Blazor.**
 
 ## Dashboard do .NET Aspire
 
-O .NET Aspire oferece uma dashboard integrada que permite aos desenvolvedores monitorar e gerenciar os serviÁos e containers que compıem a aplicaÁ„o. AtravÈs dessa dashboard, È possÌvel:
+O .NET Aspire oferece uma dashboard integrada que permite aos desenvolvedores monitorar e gerenciar os servi√ßos e containers que comp√µem a aplica√ß√£o. Atrav√©s dessa dashboard, √© poss√≠vel:
 
-- Visualizar o status de todos os containers e serviÁos em tempo real.
-- Monitorar logs centralizados de todos os serviÁos.
-- Gerenciar configuraÁıes e vari·veis de ambiente dos containers.
-- Executar comandos diretamente nos containers, como iniciar, parar ou reiniciar serviÁos.
-- Obter insights detalhados sobre a performance e a sa˙de da aplicaÁ„o, facilitando o diagnÛstico de problemas.
+- Visualizar o status de todos os containers e servi√ßos em tempo real.
+- Monitorar logs centralizados de todos os servi√ßos.
+- Gerenciar configura√ß√µes e vari√°veis de ambiente dos containers.
+- Executar comandos diretamente nos containers, como iniciar, parar ou reiniciar servi√ßos.
+- Obter insights detalhados sobre a performance e a sa√∫de da aplica√ß√£o, facilitando o diagn√≥stico de problemas.
 
-Essa dashboard È uma ferramenta essencial para garantir a alta disponibilidade e o bom funcionamento do sistema, especialmente em ambientes de produÁ„o.
+Essa dashboard √© uma ferramenta essencial para garantir a alta disponibilidade e o bom funcionamento do sistema, especialmente em ambientes de produ√ß√£o.
+![image](https://github.com/user-attachments/assets/2e9696a2-a229-4916-91d2-08059785508d)
 
-## Desenho da SoluÁ„o
+## Desenho da Solu√ß√£o
 
-Para uma vis„o geral da arquitetura e da soluÁ„o, consulte o [desenho da soluÁ„o](https://drive.google.com/file/d/1EVUvdUuXVhNjj6GVJVIOMZG1EnVjOWdF/view?usp=sharing).
+Para uma vis√£o geral da arquitetura e da solu√ß√£o, consulte o [desenho da solu√ß√£o](https://drive.google.com/file/d/1EVUvdUuXVhNjj6GVJVIOMZG1EnVjOWdF/view?usp=sharing).
 
 ## Como Executar o Projeto
 
-1. Certifique-se de ter o [Docker](https://www.docker.com/) e o .NET Framework 8 instalados em sua m·quina.
-2. Abra a soluÁ„o no Visual Studio ou em outro IDE de sua preferÍncia.
-3. Defina a aplicaÁ„o `Contoso.AppHost` como o projeto de inicializaÁ„o.
-4. Execute a aplicaÁ„o.
+1. Certifique-se de ter o [Docker](https://www.docker.com/) e o .NET Framework 8 instalados em sua m√°quina.
+2. Abra a solu√ß√£o no Visual Studio ou em outro IDE de sua prefer√™ncia.
+3. Defina a aplica√ß√£o `Contoso.AppHost` como o projeto de inicializa√ß√£o.
+4. Execute a aplica√ß√£o.
 
 ## Objetivo
 
-O objetivo principal deste projeto È fornecer uma soluÁ„o escal·vel e resiliente para o controle de fluxo de caixa di·rio, utilizando tecnologias modernas e boas pr·ticas de arquitetura de software.
+O objetivo principal deste projeto √© fornecer uma solu√ß√£o escal√°vel e resiliente para o controle de fluxo de caixa di√°rio, utilizando tecnologias modernas e boas pr√°ticas de arquitetura de software.
 
 ---
 
-Sinta-se ‡ vontade para explorar, contribuir ou relatar problemas. Esperamos que este projeto seja ˙til para o seu caso de uso!
+Sinta-se √† vontade para explorar, contribuir ou relatar problemas. Esperamos que este projeto seja √∫til para o seu caso de uso!
