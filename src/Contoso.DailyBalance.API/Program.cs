@@ -21,6 +21,7 @@ namespace Contoso.DailyBalance.API
             builder.AddApiKeyAuthentication();
             builder.Services.AddOutputCache();
 
+            builder.Services.AddContosoCacheServices();
             builder.Services.AddDailyBalanceServices();
 
             var app = builder.Build();

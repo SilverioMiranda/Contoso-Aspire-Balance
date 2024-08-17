@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ContosoTest
 {
@@ -41,7 +42,7 @@ namespace ContosoTest
                             }
                             results.Enqueue(val);
 
-                            var response = await httpClient.PostAsync("/", new StringContent(JsonConvert.SerializeObject(new Payload { Amount = val }), Encoding.UTF8, "application/json"));
+                            var response = await httpClient.PostAsync("/lancamentos", new StringContent(JsonConvert.SerializeObject(new Payload { Amount = val }), Encoding.UTF8, "application/json"));
 
                             if (response.IsSuccessStatusCode)
                             {
@@ -76,7 +77,7 @@ namespace ContosoTest
             {
                 Console.WriteLine($"Erro : Results count: {resultsCount} != {totalRequests}");
             }
-            await Task.Delay(7 * 1000);
+            //await Task.Delay(7 * 1000);
 
             var saldoAtual = await GetSaldo();
 
@@ -96,7 +97,8 @@ namespace ContosoTest
         {
             var httpClient2 = new HttpClient() { BaseAddress = new Uri("https://localhost:9000") };
             httpClient2.DefaultRequestHeaders.Add("X-API-KEY", "contoso");
-            var saldoResponse = await httpClient2.GetFromJsonAsync<BalanceR>("/");
+            var date = DateTime.UtcNow;
+            var saldoResponse = await httpClient2.GetFromJsonAsync<BalanceR>($"/consolidado/{date:yyyy-MM-dd}");
 
             Console.WriteLine($"Saldo atual: {saldoResponse.Balance}, saldo real : {saldoResponse.Soma}, data do saldo : {saldoResponse.BalanceDate}");
             return saldoResponse.Balance;

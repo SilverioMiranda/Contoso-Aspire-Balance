@@ -1,11 +1,14 @@
-﻿using Contoso.Infrastructure.Messaging;
+﻿using Contoso.CacheService;
+using Contoso.Infrastructure.Messaging;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Contoso.Transactions.Services
 {
-    public class TransactionQueueService(IEventPublisher publisher, TimeProvider timeProvider, ILogger<TransactionQueueService> logger) : ITransactionQueueService
+    public class TransactionQueueService(IContosoCache contosoCache,IEventPublisher publisher, TimeProvider timeProvider, ILogger<TransactionQueueService> logger, IDistributedCache cache) : ITransactionQueueService
     {
         private static readonly string TopicName = "transactions";
 
@@ -13,6 +16,9 @@ namespace Contoso.Transactions.Services
         {
             try
             {
+                var date = timeProvider.GetUtcNow();
+                
+                await contosoCache.IncrementBalanceAsync(DateOnly.FromDateTime(date.Date), Convert.ToInt64(transaction.Amount));
                 // Aplica a política de retry ao publicar o evento, passando o logger pelo contexto
                 await RetryPolicy.ExecuteAsync(async (context) =>
                 {

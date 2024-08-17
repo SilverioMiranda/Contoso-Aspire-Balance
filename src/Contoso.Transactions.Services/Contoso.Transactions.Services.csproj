@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Contoso.CacheService\Contoso.CacheService.csproj" />
     <ProjectReference Include="..\Contoso.Data\Contoso.Data.csproj" />
     <ProjectReference Include="..\Contoso.Infrastructure.Messaging\Contoso.Infrastructure.Messaging.csproj" />
   </ItemGroup>

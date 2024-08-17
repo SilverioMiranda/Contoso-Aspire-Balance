@@ -23,6 +23,7 @@ namespace Contoso.Transactions.API
 
             builder.AddTransactionServices();
 
+            builder.Services.AddContosoCacheServices();
             // Add services to the container.
             builder.Services.AddProblemDetails();
             builder.AddApiKeyAuthentication();

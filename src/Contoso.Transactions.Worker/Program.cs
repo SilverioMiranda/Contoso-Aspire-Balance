@@ -13,6 +13,7 @@ namespace Contoso.Transactions.Worker
             // Add service defaults & Aspire components.
             builder.AddServiceDefaults();
 
+            builder.Services.AddContosoCacheServices();
             // Add services to the container.
             builder.Services.AddProblemDetails();
             builder.AddContosoDbContext();
