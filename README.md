@@ -138,7 +138,7 @@ Para uma visão geral da arquitetura e da solução, consulte o [desenho da solu
 
 ## Como Executar o Projeto
 
-1. Certifique-se de ter o [Docker](https://www.docker.com/) e o .NET Framework 8 instalados em sua máquina.
+1. Certifique-se de ter o [Docker](https://www.docker.com/) e o .NET Framework 8 e o [Microsoft Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/setup-tooling?tabs=windows&pivots=dotnet-cli#install-net-aspire) instalados em sua máquina
 2. Abra a solução no Visual Studio ou em outro IDE de sua preferência.
 3. Defina a aplicação `Contoso.AppHost` como o projeto de inicialização.
 4. Execute a aplicação.
