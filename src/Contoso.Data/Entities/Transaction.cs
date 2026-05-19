@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Contoso.Data.Entities
 {
@@ -10,7 +11,10 @@ namespace Contoso.Data.Entities
         /// </summary>
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
-        [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+
+        [JsonIgnore]
+        public Guid RequestId { get; set; }
+
         public DateTimeOffset CreatedAt { get; set; }
         public string? Description { get; set; }
         public decimal Value { get; set; }

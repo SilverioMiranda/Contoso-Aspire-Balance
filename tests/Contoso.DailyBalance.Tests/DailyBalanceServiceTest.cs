@@ -1,120 +1,85 @@
-﻿using Contoso.DailyBalance.Services;
+using Contoso.CacheService;
+using Contoso.DailyBalance.Services;
 using Contoso.Data;
 using Contoso.Data.Entities;
-using Docker.DotNet.Models;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.StackExchangeRedis;
-using Microsoft.Extensions.Logging;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Testcontainers.MsSql;
-using Testcontainers.Redis;
 
 namespace Contoso.DailyBalance.Tests
 {
     public class DailyBalanceServiceTests : IAsyncLifetime
     {
-        private readonly RedisContainer _redisContainer;
-        private readonly Mock<ILogger<DailyBalanceService>> _mockLogger;
-        private readonly Mock<TimeProvider> _mockTimeProvider;
+        private static readonly DateTimeOffset s_seedTransactionTimestamp = new(2026, 5, 18, 12, 0, 0, TimeSpan.Zero);
+
+        private readonly MsSqlContainer _msSqlContainer = new MsSqlBuilder().Build();
+        private readonly Mock<IContosoCache> _cacheMock = new();
         private ContosoDbContext? _dbContext;
-
-        public DailyBalanceServiceTests()
-        {
-            _redisContainer = new RedisBuilder().Build();
-            _mockLogger = new Mock<ILogger<DailyBalanceService>>();
-            _mockTimeProvider = new Mock<TimeProvider>();
-
-
-        }
-
-        private readonly MsSqlContainer _msSqlContainer
-            = new MsSqlBuilder().Build();
 
         public async Task InitializeAsync()
         {
             await _msSqlContainer.StartAsync();
-            await _redisContainer.StartAsync();
             await using var connection = new SqlConnection(_msSqlContainer.GetConnectionString());
             await connection.OpenAsync();
 
             var options = new DbContextOptionsBuilder<ContosoDbContext>()
-             .UseSqlServer(_msSqlContainer.GetConnectionString())
-               .Options;
+                .UseSqlServer(_msSqlContainer.GetConnectionString())
+                .Options;
 
             _dbContext = new ContosoDbContext(options);
             await _dbContext.Database.MigrateAsync().ConfigureAwait(false);
-            // Seed de dados no banco de dados
             _dbContext.Transactions.AddRange(
-                new Transaction { Value = 50 },
-                new Transaction { Value = 100 }
-            );
-            await _dbContext.SaveChangesAsync();
+                new Transaction { CreatedAt = s_seedTransactionTimestamp, Value = 50 },
+                new Transaction { CreatedAt = s_seedTransactionTimestamp.AddHours(1), Value = 100 });
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        public Task DisposeAsync()
+        public Task DisposeAsync() => _msSqlContainer.DisposeAsync().AsTask();
+
+        [Fact]
+        public async Task GetBalanceAsync_ComputesBalanceAndCachesValue_WhenCacheMiss()
         {
-            return Task.WhenAll(
-                _msSqlContainer.DisposeAsync().AsTask(),
-                _redisContainer.DisposeAsync().AsTask()
-            );
+            var referenceDate = new DateTimeOffset(2026, 5, 18, 10, 0, 0, TimeSpan.Zero);
+            _cacheMock
+                .Setup(cache => cache.GetBalanceAsync(DateOnly.FromDateTime(referenceDate.Date), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((decimal?)null);
+
+            var service = new DailyBalanceService(_cacheMock.Object, _dbContext!);
+            var response = await service.GetBalanceAsync(referenceDate.UtcDateTime, CancellationToken.None);
+
+            Assert.Equal(150, response.Balance);
+            Assert.False(response.IsFromCache);
+            Assert.Equal(new DateTimeOffset(2026, 5, 18, 0, 0, 0, TimeSpan.Zero), response.BalanceDate);
+            _cacheMock.Verify(
+                cache => cache.SetBalanceAsync(
+                    DateOnly.FromDateTime(referenceDate.Date),
+                    150m,
+                    TimeSpan.FromSeconds(DailyBalanceService.CacheExpirationInSeconds),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Fact]
-        public async Task GetBalanceAsync_ReturnsCachedBalance_WhenCacheIsValid()
+        public async Task GetBalanceAsync_ReturnsCachedBalance_WhenCacheHit()
         {
-            // Arrange
-            var cacheOptions = new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(DailyBalanceService.CacheExpirationInSeconds)
-            };
+            var referenceDate = new DateTimeOffset(2026, 5, 18, 10, 0, 0, TimeSpan.Zero);
+            _cacheMock
+                .Setup(cache => cache.GetBalanceAsync(DateOnly.FromDateTime(referenceDate.Date), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(150m);
 
-            var cache = new RedisCache(new RedisCacheOptions
-            {
-                Configuration = _redisContainer.GetConnectionString()
-            });
+            var service = new DailyBalanceService(_cacheMock.Object, _dbContext!);
+            var response = await service.GetBalanceAsync(referenceDate.UtcDateTime, CancellationToken.None);
 
-            var initialTime = DateTime.UtcNow;
-            _mockTimeProvider.Setup(tp => tp.GetUtcNow()).Returns(initialTime);
-
-            var service = new DailyBalanceService(cache, _dbContext, _mockLogger.Object, _mockTimeProvider.Object);
-
-            // Act - Primeiro cálculo para preencher o cache
-            var response1 = await service.GetBalanceAsync(initialTime,CancellationToken.None);
-
-            // Assert - Verifica se o primeiro cálculo está correto
-            Assert.NotNull(response1);
-            Assert.Equal(150, response1.Balance);
-            Assert.False(response1.IsFromCache);
-
-            // Simula tempo dentro do limite de expiração do cache
-            _mockTimeProvider.Setup(tp => tp.GetUtcNow()).Returns(initialTime.AddSeconds(DailyBalanceService.CacheExpirationInSeconds));
-
-            // Act - Segunda chamada que deve retornar do cache
-            var response2 = await service.GetBalanceAsync(initialTime, CancellationToken.None);
-
-            // Assert - Verifica se o valor foi obtido do cache
-            Assert.NotNull(response2);
-            Assert.Equal(150, response2.Balance);
-            Assert.True(response2.IsFromCache);
-
-            // Simula tempo além do limite de expiração do cache
-            _mockTimeProvider.Setup(tp => tp.GetUtcNow()).Returns(initialTime.AddSeconds(70));
-
-            // Act - Terceira chamada que deve recalcular o saldo após expiração do cache
-            var response3 = await service.GetBalanceAsync(initialTime, CancellationToken.None);
-
-            // Assert - Verifica se o cache foi expirado e o saldo recalculado
-            Assert.NotNull(response3);
-            Assert.Equal(150, response3.Balance);
-            Assert.False(response3.IsFromCache); // Deve indicar que o valor não veio do cache
+            Assert.Equal(150, response.Balance);
+            Assert.True(response.IsFromCache);
+            _cacheMock.Verify(
+                cache => cache.SetBalanceAsync(
+                    It.IsAny<DateOnly>(),
+                    It.IsAny<decimal>(),
+                    It.IsAny<TimeSpan>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
         }
     }
 }

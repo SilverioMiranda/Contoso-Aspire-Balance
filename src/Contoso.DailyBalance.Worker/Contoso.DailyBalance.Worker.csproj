@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Contoso.Data\Contoso.Data.csproj" />
+		<ProjectReference Include="..\Contoso.DailyBalance.Services\Contoso.DailyBalance.Services.csproj" />
 		<ProjectReference Include="..\Contoso.Infrastructure.Messaging\Contoso.Infrastructure.Messaging.csproj" />
 		<ProjectReference Include="..\Contoso.ServiceDefaults\Contoso.ServiceDefaults.csproj" />
 	</ItemGroup>

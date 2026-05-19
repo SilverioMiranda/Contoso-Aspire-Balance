@@ -40,6 +40,9 @@ namespace Contoso.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Date")
+                        .IsUnique();
+
                     b.ToTable("balances");
                 });
 
@@ -52,17 +55,27 @@ namespace Contoso.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetimeoffset")
                         .HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid>("RequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWID()");
+
                     b.Property<decimal>("Value")
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
 
                     b.ToTable("transactions");
                 });

@@ -1,7 +1,6 @@
 namespace Contoso.DailyBalance.API
 {
     using Contoso.DailyBalance.Services;
-    using Contoso.Data;
     using Contoso.ServiceDefaults;
     using Microsoft.AspNetCore.Mvc;
 
@@ -9,38 +8,44 @@ namespace Contoso.DailyBalance.API
     {
         public static async Task Main(string[] args)
         {
-
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add service defaults & Aspire components.
             builder.AddServiceDefaults();
-
-            // Add services to the container.
             builder.Services.AddProblemDetails();
             builder.AddContosoDbContext();
             builder.AddApiKeyAuthentication();
-            builder.Services.AddOutputCache();
-
             builder.Services.AddContosoCacheServices();
             builder.Services.AddDailyBalanceServices();
 
             var app = builder.Build();
-            // Adiciona o middleware de Trace-Id ao pipeline
             app.UseMiddleware<TraceIdMiddleware>();
-            app.UseAuthorization();
-            // Configure the HTTP request pipeline.
             app.UseExceptionHandler();
+            app.UseAuthentication();
+            app.UseAuthorization();
 
-            app.MapGet("/consolidado/{data}", async ([FromRoute] DateTime data, [FromServices] IDailyBalanceService dailyBalanceService, HttpContext http, CancellationToken cancellationToken) =>
+            app.MapGet("/consolidado/{data}", async (
+                [FromRoute] DateTime data,
+                [FromServices] IDailyBalanceService dailyBalanceService,
+                [FromServices] TimeProvider timeProvider,
+                CancellationToken cancellationToken) =>
             {
-                var consolidado = await dailyBalanceService.GetBalanceAsync(data, cancellationToken).ConfigureAwait(false);
-                return Results.Ok(consolidado);
+                var requestedDate = DateOnly.FromDateTime(data.Date);
+                var currentDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+                if (requestedDate > currentDate)
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>(StringComparer.Ordinal)
+                    {
+                        ["data"] = ["A data informada não pode estar no futuro."],
+                    });
+                }
+
+                var consolidatedBalance = await dailyBalanceService.GetBalanceAsync(data, cancellationToken).ConfigureAwait(false);
+                return Results.Ok(consolidatedBalance);
             });
 
             app.MapDefaultEndpoints();
 
             await app.RunAsync().ConfigureAwait(false);
-
         }
     }
 }

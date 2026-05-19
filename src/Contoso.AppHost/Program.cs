@@ -10,8 +10,7 @@ namespace Contoso.AppHost
             var builder = DistributedApplication.CreateBuilder(args);
 
             var messaging = builder.AddKafka("kafka").WithHealthCheck();
-            var kafkaUi = messaging.WithKafkaUI().WaitForCompletion(messaging).WithHealthCheck();
-            //var messaging = builder.AddKafka("kafka").WithKafkaUI().WithHealthCheck();
+            messaging.WithKafkaUI();
             var db1 = builder.AddSqlServer("sql").AddDatabase("db1");
 
             var cache = builder.AddRedis("cache");
@@ -25,23 +24,17 @@ namespace Contoso.AppHost
             var dailybalance_api = builder.AddProject<Projects.Contoso_DailyBalance_API>("dailybalance-api")
                 .WithReference(cache)
                 .WithReference(db1)
-                .WithReference(messaging)
                 .WithReplicas(2)
                 .WaitFor(db1)
-                .WaitFor(messaging)
                 .WaitForCompletion(db1_migrator)
-                .WaitFor(kafkaUi)
                 //.WaitFor(cache)
                 ;
 
             var dailybalance_worker = builder.AddProject<Projects.Contoso_DailyBalance_Worker>("dailybalance-worker")
                .WithReference(cache)
-               .WithReference(messaging)
                .WithReference(db1)
                .WaitFor(db1)
-               .WaitFor(messaging)
                .WaitForCompletion(db1_migrator)
-               .WaitFor(kafkaUi)
                // .WaitFor(cache)
                ;
 
@@ -63,7 +56,6 @@ namespace Contoso.AppHost
                 .WaitFor(db1)
                 .WaitFor(messaging)
                 .WaitForCompletion(db1_migrator)
-                .WaitFor(kafkaUi)
                 // .WaitFor(cache)
                 ;
 

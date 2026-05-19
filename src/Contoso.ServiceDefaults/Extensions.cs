@@ -1,4 +1,4 @@
-using Contoso.ServiceDefaults;
+ï»¿using Contoso.ServiceDefaults;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -20,6 +20,7 @@ public static class Extensions
 {
     public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder)
     {
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.ConfigureOpenTelemetry();
 
         builder.AddDefaultHealthChecks2();
@@ -61,9 +62,9 @@ public static class Extensions
      .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>("ApiKey", configureOptions: null);
 
         builder.Services.AddSingleton<IApiKeyValidator, ApiKeyValidator>();
-        // Configura a política de autorização global
+        // Configura a polÃ­tica de autorizaÃ§Ã£o global
         builder.Services.AddAuthorizationBuilder()
-            // Configura a política de autorização global
+            // Configura a polÃ­tica de autorizaÃ§Ã£o global
             .SetFallbackPolicy(new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build());

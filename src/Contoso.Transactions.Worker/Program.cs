@@ -1,6 +1,5 @@
 namespace Contoso.Transactions.Worker
 {
-    using Contoso.Data;
     using Contoso.ServiceDefaults;
     using Contoso.Transactions.Services;
 
@@ -8,18 +7,13 @@ namespace Contoso.Transactions.Worker
     {
         public static async Task Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
+            var builder = Host.CreateApplicationBuilder(args);
 
-            // Add service defaults & Aspire components.
             builder.AddServiceDefaults();
-
-            builder.Services.AddContosoCacheServices();
-            // Add services to the container.
-            builder.Services.AddProblemDetails();
             builder.AddContosoDbContext();
-            
-            builder.AddTransactionServices();
+            builder.AddTransactionWorkerServices();
             builder.Services.AddHostedService<TransactionsWorker>();
+
             var host = builder.Build();
             await host.RunAsync().ConfigureAwait(false);
         }

@@ -1,152 +1,214 @@
 # Contoso Cash Flow Management
 
-Este projeto foi desenvolvido para atender a necessidade de um comerciante em controlar seu fluxo de caixa diário, gerenciando lançamentos (débitos e créditos) e gerando relatórios com o saldo diário consolidado.
+PoC em C# para o desafio de arquitetura de software: controlar lançamentos de caixa (débitos e créditos) e expor o saldo diário consolidado com foco em escalabilidade, resiliência e simplicidade adequada para entrevista.
 
-## Tecnologias Utilizadas
+## Visão Geral
 
-- [.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/)
-- Docker
-- .NET Framework 8
+A solução foi organizada em serviços separados por responsabilidade:
+
+- `Contoso.Transactions.API`
+  Responsável por receber lançamentos e consultar lançamentos de um dia.
+- `Contoso.Transactions.Worker`
+  Consome eventos do Kafka e persiste os lançamentos no SQL Server.
+- `Contoso.DailyBalance.API`
+  Expõe o saldo consolidado diário.
+- `Contoso.DailyBalance.Worker`
+  Materializa o saldo de fechamento do dia anterior.
+- `Contoso.Web`
+  Frontend Blazor para navegação básica da PoC.
+- `Contoso.AppHost`
+  Orquestra toda a solução com .NET Aspire.
+
+## Decisões Arquiteturais
+
+### 1. Escrita assíncrona para desacoplar o consolidado
+
+O requisito principal do desafio diz que o serviço de lançamentos não deve ficar indisponível se o consolidado cair. Para isso, o `POST /lancamentos` publica o comando em Kafka e responde `202 Accepted`; a persistência final acontece no `Transactions.Worker`.
+
+### 2. Banco como fonte de verdade financeira
+
+SQL Server é a fonte de verdade. Redis não participa da consistência financeira; ele foi mantido apenas como cache de leitura curta do consolidado.
+
+### 3. Idempotência no write path
+
+Cada lançamento aceita `X-Idempotency-Key`. Se o cliente repetir a mesma operação com o mesmo GUID, a persistência não duplica o evento graças ao `RequestId` com índice único no banco.
+
+### 4. Saldo consolidado como saldo acumulado até o fechamento do dia
+
+O saldo retornado por `/consolidado/{data}` representa o saldo acumulado até `23:59:59` UTC do dia solicitado. O serviço:
+
+- usa saldo materializado do dia, quando existir;
+- senão, parte do último saldo persistido anterior;
+- soma apenas o delta de transações necessário;
+- devolve o resultado e o coloca em cache por poucos segundos.
+
+### 5. Worker diário para materialização
+
+O `DailyBalance.Worker` roda por cron e grava o saldo do dia anterior em `balances`, reduzindo custo de leitura para consultas históricas.
+
+### 6. Segurança simples, suficiente para a PoC
+
+Foi mantida autenticação por `X-API-KEY`, configurável por `appsettings`. Para o contexto da entrevista, isso entrega proteção básica sem inflar o escopo com OAuth/JWT.
+
+## Fluxo da Solução
+
+```mermaid
+flowchart LR
+    C[Cliente / Web] --> TA[Transactions API]
+    TA -->|Publica evento| K[Kafka]
+    K --> TW[Transactions Worker]
+    TW --> DB[(SQL Server)]
+    DB --> DA[DailyBalance API]
+    DB --> DW[DailyBalance Worker]
+    DW --> DB
+    DA --> R[(Redis Cache)]
+    R --> DA
+```
+
+## Melhorias Implementadas
+
+- correção do baseline do Aspire e atualização dos pacotes para versão compatível;
+- remoção de uso incorreto de `long` em valores monetários;
+- cache de saldo refeito para `decimal`;
+- inclusão de `RequestId` com índice único para idempotência;
+- listagem de lançamentos com filtro por faixa UTC e paginação estável;
+- worker diário corrigido, com cron finito e sem loop defeituoso;
+- frontend deixando de acessar `DbContext` diretamente;
+- API key agora lida de configuração;
+- migrations alinhadas com o modelo atual;
+- build limpo e testes automatizados passando.
+
+## Requisitos Não Funcionais Atendidos
+
+- `Transactions` continua disponível mesmo se `DailyBalance` falhar, porque a entrada de lançamentos não depende do serviço de consolidado.
+- O consolidado usa saldo materializado + cache curto para reduzir custo de leitura.
+- A solução está preparada para escala horizontal no lado de API, com persistência idempotente e processamento assíncrono.
+- O AppHost do Aspire facilita observabilidade operacional e composição local da PoC.
+
+## Tecnologias
+
+- .NET 8
+- C#
+- .NET Aspire
 - SQL Server
 - Kafka
-- Blazor
 - Redis
+- Blazor
+- xUnit
+- Testcontainers
 
-## Estrutura do Projeto
+## Como Rodar Localmente
 
-O projeto consiste em várias APIs e serviços que trabalham juntos para garantir o controle eficiente do fluxo de caixa:
+### Pré-requisitos
 
-**Transactions API**
-- Endereço: `https://localhost:9001`
-- Função: Receber lançamentos (créditos e débitos) e enviá-los para um tópico no Kafka.
+- .NET 8 SDK
+- Docker Desktop
+- certificado HTTPS de desenvolvimento confiável (`dotnet dev-certs https --trust`, se necessário)
 
-**Exemplo de Requisição de Criação de Lançamento:**
+### Passos
+
+1. Restaurar e compilar:
+
 ```bash
-curl --location 'https://localhost:9001/lancamentos' \
+dotnet restore
+dotnet build Contoso.sln --nologo
+```
+
+2. Subir a solução pelo Aspire:
+
+```bash
+dotnet run --project src/Contoso.AppHost
+```
+
+3. Abrir o dashboard do Aspire e usar os endpoints publicados para:
+
+- `webfrontend`
+- `transactions-api`
+- `dailybalance-api`
+
+## API Key
+
+Por padrão a PoC usa:
+
+```text
+X-API-KEY: contoso
+```
+
+Esse valor está configurado em `appsettings.json` e pode ser trocado sem mudar código.
+
+## Exemplos de Uso
+
+Substitua `BASE_TRANSACTIONS_URL` e `BASE_DAILYBALANCE_URL` pelos endereços mostrados no Aspire Dashboard.
+
+### Criar lançamento
+
+```bash
+curl --location 'BASE_TRANSACTIONS_URL/lancamentos' \
 --header 'X-API-KEY: contoso' \
+--header 'X-Idempotency-Key: 11111111-1111-1111-1111-111111111111' \
 --header 'Content-Type: application/json' \
 --data '{
-    "Amount": -500
+  "amount": 150.75,
+  "description": "Venda no caixa"
 }'
 ```
-Esta requisição adiciona um lançamento ao banco de dados, que pode ser um valor positivo (crédito) ou negativo (débito).
 
-**API para Listar Lançamentos do Dia:**
+### Listar lançamentos do dia
+
 ```bash
-curl --location 'https://localhost:9001/lancamentos/2024-08-13' \
+curl --location 'BASE_TRANSACTIONS_URL/lancamentos/2026-05-18?page=0&limit=10' \
 --header 'X-API-KEY: contoso'
 ```
 
-**API para Ver o Saldo Consolidado do Dia:**
+### Consultar saldo consolidado
+
 ```bash
-curl --location 'https://localhost:9000/consolidado/2024-08-13' \
+curl --location 'BASE_DAILYBALANCE_URL/consolidado/2026-05-18' \
 --header 'X-API-KEY: contoso'
 ```
 
-**Contoso.Transactions.Worker**
-- Função: Consumir as mensagens do Kafka em um `BackgroundService` e salvar os lançamentos no banco de dados SQL Server.
+## Testes
 
-## Estrutura de Projetos e Pastas
+```bash
+dotnet test Contoso.sln --no-build --nologo --blame-hang --blame-hang-timeout 5m
+```
 
-- **src/0. Host / Contoso.AppHost**
-  - Serviço do .NET Aspire que orquestra os containers e serviços necessários para o funcionamento do projeto. Este serviço gerencia a configuração dos containers, inicia e monitora as instâncias das aplicações e serviços, e garante a comunicação entre os componentes do sistema.
+Cobertura atual validada:
 
-- **1. Applications**
-  
-  - **Balances**
-    - **Contoso.DailyBalance.API**: Projeto que contém a API `/consolidado/{data}` que retorna o saldo consolidado do dia informado.
-    - **Contoso.DailyBalance.Services**: Projeto que contém a implementação dos serviços utilizados pela `Contoso.DailyBalance.API` e `Contoso.DailyBalance.Worker`.
-    - **Contoso.DailyBalance.Worker**: Projeto que executa um `BackgroundService` todos os dias às 00:15, responsável por salvar o balanço do dia anterior.
+- cálculo e cache do saldo diário;
+- smoke test do frontend;
+- build da solução sem warnings.
 
-      O cálculo do saldo diário é feito da seguinte forma:
+## Trade-offs Assumidos
 
-      1. **Verificação do Último Saldo**: O saldo mais recente é obtido do banco de dados.
-      2. **Cálculo do Saldo Inicial**: Se não houver saldo anterior, o saldo total é calculado somando todos os lançamentos desde o início.
-      3. **Atualização do Saldo**: Se houver um saldo anterior, o sistema verifica se ele cobre o dia anterior. Caso contrário, ele calcula o saldo somando os lançamentos realizados desde o último saldo até o último segundo do dia anterior.
-      4. **Persistência do Novo Saldo**: O novo saldo consolidado é salvo no banco de dados com a data correspondente.
+- o `POST /lancamentos` responde `202 Accepted` em vez de confirmação síncrona de persistência;
+- a autenticação é simples por API key, propositalmente;
+- a materialização do saldo diário usa worker agendado, não stream processing contínuo;
+- a consistência entre publicação e persistência ainda é de PoC, sem outbox transacional completo.
 
-      **Exemplo de Cálculo do Saldo:**
-      ```csharp
-      var ultimoSaldo = await dbContext.Balances
-          .OrderByDescending(x => x.Date)
-          .FirstOrDefaultAsync(cancellationToken: stoppingToken)
-          .ConfigureAwait(false);
+## Evoluções Futuras Recomendadas
 
-      decimal saldo = 0;
-      var now = timeProvider.GetUtcNow();
-      var maxDatePreviousDay = now.AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+- implementar `Outbox/Inbox` para garantir publicação e consumo exatamente uma vez no fluxo distribuído;
+- adicionar endpoint de consulta por `RequestId` para acompanhamento do processamento assíncrono;
+- criar testes distribuídos completos cobrindo AppHost + Kafka + fluxo funcional ponta a ponta;
+- expor métricas e SLOs para taxa de erro, latência e backlog de processamento;
+- mover API key para secret store central se a PoC evoluir para ambiente real;
+- criar projeções adicionais para relatórios e analytics sem pressionar o write model;
+- adicionar rate limit e auditoria por cliente.
 
-      if (ultimoSaldo is null)
-      {
-          // Cache miss: Calcula o saldo total pela primeira vez
-          saldo = await dbContext.Transactions
-              .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-              .ConfigureAwait(false);
-      }
-      else
-      {
-          // Verifica se a data da última transação é anterior ao dia anterior
-          if (ultimoSaldo.Date < now.AddDays(-1))
-          {
-              // Usa UTCNow - 15 minutos como data máxima
-              var maxDate = now.AddMinutes(-15);
+## Documentação no Repositório
 
-              saldo = ultimoSaldo.Value + await dbContext.Transactions
-                  .Where(t => t.CreatedAt > ultimoSaldo.Date && t.CreatedAt <= maxDate)
-                  .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-                  .ConfigureAwait(false);
-          }
-          else
-          {
-              // Usa o último segundo do dia anterior como data máxima
-              saldo = ultimoSaldo.Value + await dbContext.Transactions
-                  .Where(t => t.CreatedAt > ultimoSaldo.Date && t.CreatedAt <= maxDatePreviousDay)
-                  .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-                  .ConfigureAwait(false);
-          }
-      }
+- `README.md`
+- `.backlog/0001-analise-arquitetural-desafio-jan25.md`
+- `.backlog/0002-implementar-melhorias-poc-arquitetura.md`
+- `.backlog/_knowledge/arquitetura.md`
 
-      await dbContext.Balances.AddAsync(new Balance { Value = saldo, Date = maxDatePreviousDay }, stoppingToken)
-          .ConfigureAwait(false);
+## Resumo Final
 
-      await dbContext.SaveChangesAsync().ConfigureAwait(false);
-      ```
+Esta PoC ficou intencionalmente simples, mas com decisões arquiteturais defensáveis:
 
-  - **Transactions**
-    - **Contoso.Transactions.API**: API que implementa os métodos `POST /lancamentos`, que faz o cadastro de um lançamento, e o `GET /lancamentos/{date:datetime}`, que retorna a lista de todos os lançamentos do dia informado.
-    - **Contoso.Transactions.Services**: Projeto que implementa os serviços utilizados pela `.API` e `.Worker`.
-    - **Contoso.Transactions.Worker**: Projeto que é responsável por ler os lançamentos do Kafka e salvá-los no SQL Server.
-
-- **Opcionalmente existe o projeto Contoso.Web com uma aplicação Blazor.**
-
-## Dashboard do .NET Aspire
-
-O .NET Aspire oferece uma dashboard integrada que permite aos desenvolvedores monitorar e gerenciar os serviços e containers que compõem a aplicação. Através dessa dashboard, é possível:
-
-- Visualizar o status de todos os containers e serviços em tempo real.
-- Monitorar logs centralizados de todos os serviços.
-- Gerenciar configurações e variáveis de ambiente dos containers.
-- Executar comandos diretamente nos containers, como iniciar, parar ou reiniciar serviços.
-- Obter insights detalhados sobre a performance e a saúde da aplicação, facilitando o diagnóstico de problemas.
-
-Essa dashboard é uma ferramenta essencial para garantir a alta disponibilidade e o bom funcionamento do sistema, especialmente em ambientes de produção.
-![image](https://github.com/user-attachments/assets/2e9696a2-a229-4916-91d2-08059785508d)
-
-## Desenho da Solução
-
-Para uma visão geral da arquitetura e da solução, consulte o [desenho da solução](https://drive.google.com/file/d/1EVUvdUuXVhNjj6GVJVIOMZG1EnVjOWdF/view?usp=sharing).
-
-## Como Executar o Projeto
-
-1. Certifique-se de ter o [Docker](https://www.docker.com/) e o .NET Framework 8 e o [Microsoft Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/setup-tooling?tabs=windows&pivots=dotnet-cli#install-net-aspire) instalados em sua máquina
-2. Abra a solução no Visual Studio
-3. Defina a aplicação `Contoso.AppHost` como o projeto de inicialização.
-4. Execute a aplicação.
-
-## Objetivo
-
-O objetivo principal deste projeto é fornecer uma solução escalável e resiliente para o controle de fluxo de caixa diário, utilizando tecnologias modernas e boas práticas de arquitetura de software.
-
----
-
-Sinta-se à vontade para explorar, contribuir ou relatar problemas. Esperamos que este projeto seja útil para o seu caso de uso!
+- separação entre entrada de lançamentos e leitura consolidada;
+- persistência durável como base financeira;
+- cache somente como acelerador;
+- idempotência no write path;
+- documentação clara de trade-offs e próximos passos.

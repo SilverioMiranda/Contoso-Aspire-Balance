@@ -1,3 +1,6 @@
+using Contoso.Web;
+using Microsoft.AspNetCore.Mvc.Testing;
+
 namespace Contoso.Tests;
 
 public class WebTests
@@ -5,24 +8,15 @@ public class WebTests
     [Fact]
     public async Task GetWebResourceRootReturnsOkStatusCode()
     {
-        // Arrange
-        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Contoso_AppHost>();
-        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
-        {
-            clientBuilder.AddStandardResilienceHandler();
-        });
-        // To output logs to the xUnit.net ITestOutputHelper, consider adding a package from https://www.nuget.org/packages?q=xunit+logging
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("ConnectionStrings:cache", "localhost:6379");
+            });
 
-        await using var app = await appHost.BuildAsync();
-        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
-        await app.StartAsync();
-
-        // Act
-        var httpClient = app.CreateHttpClient("webfrontend");
-        await resourceNotificationService.WaitForResourceAsync("webfrontend", KnownResourceStates.Running).WaitAsync(TimeSpan.FromSeconds(30));
+        var httpClient = factory.CreateClient();
         var response = await httpClient.GetAsync("/");
 
-        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }

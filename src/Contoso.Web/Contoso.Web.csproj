@@ -7,12 +7,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Contoso.Data\Contoso.Data.csproj" />
 		<ProjectReference Include="..\Contoso.ServiceDefaults\Contoso.ServiceDefaults.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="8.1.0" />
+		<PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="9.2.0" />
 	</ItemGroup>
 
 </Project>

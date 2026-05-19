@@ -1,36 +1,40 @@
-﻿using Cronos;
+using Cronos;
 
 namespace Contoso.DailyBalance.Worker
 {
-    public abstract class CronBackgroundWorker : BackgroundService
+    public abstract class CronBackgroundWorker(
+        ILogger logger,
+        TimeProvider timeProvider,
+        string cronExpression) : BackgroundService
     {
-        protected ILogger Logger { get; }
-        private string _cronExpression { get; }
-        protected CronBackgroundWorker(ILogger logger, string cronExpression)
-        {
-            Logger = logger;
-            _cronExpression = cronExpression;
-        }
+        protected ILogger Logger { get; } = logger;
+        protected TimeProvider TimeProvider { get; } = timeProvider;
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await WaitForNextScheduleAsync(stoppingToken).ConfigureAwait(false);
-            await ExecuteCronAsync(stoppingToken).ConfigureAwait(false);
+            var parsedExpression = CronExpression.Parse(cronExpression);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var utcNow = TimeProvider.GetUtcNow().UtcDateTime;
+                var nextOccurrence = parsedExpression.GetNextOccurrence(utcNow, TimeZoneInfo.Utc);
+                if (!nextOccurrence.HasValue)
+                {
+                    Logger.LogWarning("Nenhuma próxima execução foi encontrada para a expressão cron {CronExpression}.", cronExpression);
+                    return;
+                }
+
+                var delay = nextOccurrence.Value - utcNow;
+                if (delay > TimeSpan.Zero)
+                {
+                    Logger.LogInformation("Próxima execução agendada para {NextOccurrenceUtc}.", nextOccurrence.Value);
+                    await Task.Delay(delay, TimeProvider, stoppingToken).ConfigureAwait(false);
+                }
+
+                await ExecuteCronAsync(stoppingToken).ConfigureAwait(false);
+            }
         }
+
         protected abstract Task ExecuteCronAsync(CancellationToken stoppingToken);
-
-        private async Task WaitForNextScheduleAsync( CancellationToken cancellationToken)
-        {
-            var parsedExp = CronExpression.Parse(_cronExpression);
-            var currentUtcTime = DateTimeOffset.UtcNow.UtcDateTime;
-            var occurenceTime = parsedExp.GetNextOccurrence(currentUtcTime);
-
-            var delay = occurenceTime.GetValueOrDefault().Subtract(currentUtcTime);
-            Logger.LogInformation("The run is delayed for {delay}. Current time: {time}", delay, DateTimeOffset.Now);
-
-            await Task.Delay(Convert.ToInt32(delay.TotalMilliseconds), cancellationToken).ConfigureAwait(false);
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-        }
     }
 }

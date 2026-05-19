@@ -99,6 +99,10 @@ namespace ContosoTest
             httpClient2.DefaultRequestHeaders.Add("X-API-KEY", "contoso");
             var date = DateTime.UtcNow;
             var saldoResponse = await httpClient2.GetFromJsonAsync<BalanceR>($"/consolidado/{date:yyyy-MM-dd}");
+            if (saldoResponse is null)
+            {
+                throw new InvalidOperationException("A API de consolidado nao retornou conteudo.");
+            }
 
             Console.WriteLine($"Saldo atual: {saldoResponse.Balance}, saldo real : {saldoResponse.Soma}, data do saldo : {saldoResponse.BalanceDate}");
             return saldoResponse.Balance;

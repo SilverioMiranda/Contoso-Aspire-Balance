@@ -1,94 +1,62 @@
+using Contoso.DailyBalance.Services;
 using Contoso.Data;
 using Contoso.Data.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 
 namespace Contoso.DailyBalance.Worker
 {
-    /// <summary>
-    /// Esse BackgroundService é o respons�vel por realizar o calculo do saldo e persistir banco de dados.
-    /// </summary>
-    public class BalanceWorker: CronBackgroundWorker
+    public class BalanceWorker(
+        ILogger<BalanceWorker> logger,
+        IServiceScopeFactory serviceScopeFactory,
+        TimeProvider timeProvider,
+        IConfiguration configuration) : CronBackgroundWorker(
+            logger,
+            timeProvider,
+            configuration.GetValue<string>("DailyBalance:WorkerCronExpression") ?? "15 0 * * *")
     {
-        private readonly IServiceProvider serviceProvider;
-        private readonly TimeProvider timeProvider;
-        private readonly ILogger<BalanceWorker> logger;
-        public BalanceWorker(ILogger<BalanceWorker> logger, IServiceProvider serviceProvider, TimeProvider timeProvider,IConfiguration configuration) : base(logger, configuration.GetValue<string>("BALANCE_WORKER_CRON") ?? "15 0 * * *")
-        {
-            this.serviceProvider = serviceProvider;
-            this.timeProvider = timeProvider;
-            this.logger = logger;
-        }
-
         protected override async Task ExecuteCronAsync(CancellationToken stoppingToken)
         {
-            var scope = serviceProvider.CreateAsyncScope();
-            await using (scope.ConfigureAwait(false))
+            var balanceDate = DateOnly.FromDateTime(TimeProvider.GetUtcNow().UtcDateTime.Date.AddDays(-1));
+
+            using var scope = serviceScopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ContosoDbContext>();
+            if (await HasPersistedBalanceAsync(dbContext, balanceDate, stoppingToken).ConfigureAwait(false))
             {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ContosoDbContext>();
+                logger.LogInformation("O saldo diário de {BalanceDate} já estava persistido.", balanceDate);
+                return;
+            }
 
-                var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
-                while (!stoppingToken.IsCancellationRequested)
+            var dailyBalanceService = scope.ServiceProvider.GetRequiredService<IDailyBalanceService>();
+            var balanceValue = await dailyBalanceService.CalculateBalanceValueAsync(balanceDate, stoppingToken).ConfigureAwait(false);
+            dbContext.Balances.Add(new Balance
+            {
+                Date = ToBalanceDate(balanceDate),
+                Value = balanceValue,
+            });
+
+            try
+            {
+                await dbContext.SaveChangesAsync(stoppingToken).ConfigureAwait(false);
+                logger.LogInformation("Saldo diário de {BalanceDate} persistido com sucesso.", balanceDate);
+            }
+            catch (DbUpdateException)
+            {
+                if (!await HasPersistedBalanceAsync(dbContext, balanceDate, stoppingToken).ConfigureAwait(false))
                 {
-                    try
-                    {
-                        var ultimoSaldo = await dbContext.Balances
-                            .OrderByDescending(x => x.Date)
-                            .FirstOrDefaultAsync(cancellationToken: stoppingToken)
-                            .ConfigureAwait(false);
-
-                        decimal saldo = 0;
-                        var now = timeProvider.GetUtcNow();
-                        var maxDatePreviousDay = now.AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
-
-                        if (ultimoSaldo is null)
-                        {
-                            // Cache miss: Calcula o saldo total pela primeira vez
-                            saldo = await dbContext.Transactions
-                                .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-                                .ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            // Verifica se a data da última transação é anterior ao dia anterior
-                            if (ultimoSaldo.Date < now.AddDays(-1))
-                            {
-                                // Usa UTCNow - 15 minutos como data máxima
-                                var maxDate = now.AddMinutes(-15);
-
-                                saldo = ultimoSaldo.Value + await dbContext.Transactions
-                                    .Where(t => t.CreatedAt > ultimoSaldo.Date && t.CreatedAt <= maxDate)
-                                    .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-                                    .ConfigureAwait(false);
-                            }
-                            else
-                            {
-                                // Usa o último segundo do dia anterior como data máxima
-                                saldo = ultimoSaldo.Value + await dbContext.Transactions
-                                    .Where(t => t.CreatedAt > ultimoSaldo.Date && t.CreatedAt <= maxDatePreviousDay)
-                                    .SumAsync(t => t.Value, cancellationToken: stoppingToken)
-                                    .ConfigureAwait(false);
-                            }
-                        }
-
-
-                        await dbContext.Balances.AddAsync(new Balance { Value = saldo, Date = maxDatePreviousDay }, stoppingToken)
-                            .ConfigureAwait(false);
-
-                        await dbContext.SaveChangesAsync().ConfigureAwait(false);
-                        
-
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, "Erro ao gerar o saldo");
-                    }
-
-                    // Defina um intervalo adequado para a próxima execução do cron
-                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken).ConfigureAwait(false);
+                    throw;
                 }
+
+                logger.LogInformation("O saldo diário de {BalanceDate} já foi persistido por outra instância.", balanceDate);
             }
         }
 
+        private static async Task<bool> HasPersistedBalanceAsync(ContosoDbContext dbContext, DateOnly balanceDate, CancellationToken cancellationToken) =>
+            await dbContext.Balances
+                .AsNoTracking()
+                .AnyAsync(x => x.Date == ToBalanceDate(balanceDate), cancellationToken)
+                .ConfigureAwait(false);
+
+        private static DateTimeOffset ToBalanceDate(DateOnly date) =>
+            new(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc));
     }
 }
